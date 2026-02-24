@@ -18,6 +18,7 @@ interface DownloadProgress {
   status: 'starting' | 'downloading' | 'done' | 'error'
   total: number
   current: number
+  percent?: number
   message?: string
 }
 
@@ -123,8 +124,13 @@ export function YouTubeDownloader() {
     }
   }, [url, outputDir, info])
 
-  const progressPercent = progress && progress.total > 0
-    ? Math.round((progress.current / progress.total) * 100)
+  // Overall progress = item progress + within-item percentage
+  const progressPercent = progress
+    ? progress.status === 'done'
+      ? 100
+      : progress.total > 1
+        ? Math.round(((progress.current - 1) / progress.total) * 100 + (progress.percent ?? 0) / progress.total)
+        : Math.round(progress.percent ?? 0)
     : 0
 
   return (
@@ -217,8 +223,16 @@ export function YouTubeDownloader() {
       {progress && (
         <div className="space-y-2">
           <div className="flex justify-between text-[10px] text-slate-500">
-            <span>{progress.status === 'done' ? 'Download concluido!' : progress.status === 'error' ? 'Erro no download' : 'Baixando...'}</span>
-            {progress.total > 0 && <span>{progress.current}/{progress.total}</span>}
+            <span className="truncate flex-1 pr-2">
+              {progress.status === 'done'  ? 'Download concluído!' :
+               progress.status === 'error' ? 'Erro no download' :
+               progress.message || 'Baixando...'}
+            </span>
+            {progress.total > 0 && (
+              <span className="flex-shrink-0 text-violet-400">
+                {progress.current}/{progress.total}
+              </span>
+            )}
           </div>
           <div className="h-1.5 bg-[#2a2a3e] rounded overflow-hidden">
             <div

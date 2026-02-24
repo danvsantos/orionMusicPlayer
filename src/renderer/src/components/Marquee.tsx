@@ -6,29 +6,44 @@ interface MarqueeProps {
   className?: string
 }
 
-export function Marquee({ text, speed = 45, className = '' }: MarqueeProps) {
+export function Marquee({ text, speed = 42, className = '' }: MarqueeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const textRef = useRef<HTMLSpanElement>(null)
   const [shouldScroll, setShouldScroll] = useState(false)
   const [duration, setDuration] = useState(10)
 
   useEffect(() => {
     const measure = () => {
       const container = containerRef.current
-      const span = textRef.current
-      if (!container || !span) return
-      const overflow = span.scrollWidth > container.clientWidth
-      setShouldScroll(overflow)
-      if (overflow) {
-        // total travel = text width + gap (gap is 48px via pr-12)
-        setDuration((span.scrollWidth + 48) / speed)
+      if (!container || !text) {
+        setShouldScroll(false)
+        return
+      }
+
+      // Use Canvas measureText for accurate width regardless of overflow clipping
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      const styles = window.getComputedStyle(container)
+      ctx.font = `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`
+      const textWidth = ctx.measureText(text).width
+      const containerWidth = container.clientWidth
+
+      if (textWidth > containerWidth) {
+        setShouldScroll(true)
+        // duration = travel distance (text + gap) divided by speed
+        setDuration((textWidth + 64) / speed)
+      } else {
+        setShouldScroll(false)
       }
     }
 
-    measure()
+    // rAF ensures layout is complete before measuring
+    const raf = requestAnimationFrame(measure)
     const ro = new ResizeObserver(measure)
     if (containerRef.current) ro.observe(containerRef.current)
-    return () => ro.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [text, speed])
 
   return (
@@ -38,11 +53,11 @@ export function Marquee({ text, speed = 45, className = '' }: MarqueeProps) {
           className="marquee-track"
           style={{ '--marquee-dur': `${duration}s` } as React.CSSProperties}
         >
-          <span ref={textRef} className="pr-12 whitespace-nowrap">{text}</span>
-          <span className="pr-12 whitespace-nowrap" aria-hidden>{text}</span>
+          <span className="pr-16 whitespace-nowrap">{text}</span>
+          <span className="pr-16 whitespace-nowrap" aria-hidden>{text}</span>
         </div>
       ) : (
-        <span ref={textRef} className="whitespace-nowrap">{text}</span>
+        <span className="whitespace-nowrap">{text}</span>
       )}
     </div>
   )

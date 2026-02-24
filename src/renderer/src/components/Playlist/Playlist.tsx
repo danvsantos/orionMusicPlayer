@@ -39,7 +39,7 @@ export function Playlist() {
         path,
         filename,
         title: filename.replace(/\.[^/.]+$/, ''),
-        artist: 'Loading...',
+        artist: '',
         album: '',
         duration: 0,
         format: ext

@@ -8,7 +8,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux"
+    "package:linux": "npm run build && electron-builder --linux",
+    "create-icon": "node scripts/create-icon.mjs"
   },
   "build": {
     "appId": "com.orionplayer.app",
@@ -18,16 +19,12 @@
     },
     "mac": {
       "category": "public.app-category.music",
-      "target": [
-        "dmg",
-        "zip"
-      ]
+      "icon": "resources/icons/512x512.png",
+      "target": ["dmg", "zip"]
     },
     "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
+      "icon": "resources/icons",
+      "target": ["AppImage", "deb"],
       "category": "Audio"
     },
     "files": [

@@ -13,6 +13,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
+    icon: join(__dirname, '../../resources/icon.png'),
     backgroundColor: '#0a0a0f',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 14, y: 14 },
@@ -60,6 +61,12 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.orionplayer')
+
+  // Set dock/taskbar icon explicitly (needed in dev mode)
+  const iconPath = join(__dirname, '../../resources/icon.png')
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(iconPath)
+  }
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
