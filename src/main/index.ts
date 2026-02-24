@@ -1,10 +1,97 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { registerYouTubeHandlers, checkAndInstallYtDlp } from './youtube'
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+
+// ── Tray ─────────────────────────────────────────────────────────────────────
+
+interface TrayState {
+  isPlaying: boolean
+  title: string
+  artist: string
+}
+
+let trayState: TrayState = { isPlaying: false, title: 'Nenhuma faixa', artist: '' }
+
+function sendControl(action: string): void {
+  mainWindow?.webContents.send('player:control', action)
+}
+
+function buildTrayMenu(): Electron.Menu {
+  const trackLabel = trayState.title !== 'Nenhuma faixa'
+    ? `${trayState.title}${trayState.artist ? ' — ' + trayState.artist : ''}`
+    : 'Nenhuma faixa'
+
+  return Menu.buildFromTemplate([
+    { label: trackLabel, enabled: false },
+    { type: 'separator' },
+    {
+      label: trayState.isPlaying ? 'Pausar' : 'Reproduzir',
+      accelerator: 'Space',
+      click: () => sendControl('toggle')
+    },
+    {
+      label: 'Faixa anterior',
+      click: () => sendControl('previous')
+    },
+    {
+      label: 'Próxima faixa',
+      click: () => sendControl('next')
+    },
+    {
+      label: 'Parar',
+      click: () => sendControl('stop')
+    },
+    { type: 'separator' },
+    {
+      label: 'Mostrar OrionPlayer',
+      click: () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+      }
+    },
+    {
+      label: 'Sair',
+      click: () => app.quit()
+    }
+  ])
+}
+
+function setupTray(): void {
+  const iconPath = join(__dirname, '../../resources/icon.png')
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+
+  tray = new Tray(icon)
+  tray.setToolTip('OrionPlayer')
+  tray.setContextMenu(buildTrayMenu())
+
+  // Windows/Linux: click on tray icon shows/focuses the window
+  tray.on('click', () => {
+    if (process.platform !== 'darwin') {
+      if (mainWindow?.isVisible()) {
+        mainWindow.focus()
+      } else {
+        mainWindow?.show()
+      }
+    }
+  })
+}
+
+function refreshTrayMenu(): void {
+  if (!tray) return
+  tray.setContextMenu(buildTrayMenu())
+  tray.setToolTip(
+    trayState.title !== 'Nenhuma faixa'
+      ? `OrionPlayer — ${trayState.title}`
+      : 'OrionPlayer'
+  )
+}
+
+// ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -44,28 +131,40 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // IPC for window controls
+  // Window controls
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
   })
   ipcMain.on('window:close', () => mainWindow?.close())
+
+  // Tray state update from renderer
+  ipcMain.on('tray:update', (_, state: TrayState) => {
+    trayState = state
+    refreshTrayMenu()
+  })
 
   registerIpcHandlers()
   registerYouTubeHandlers()
 }
 
+// ── App lifecycle ─────────────────────────────────────────────────────────────
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.orionplayer')
 
-  // Set dock/taskbar icon explicitly (needed in dev mode)
   const iconPath = join(__dirname, '../../resources/icon.png')
+
+  // macOS dock
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(iconPath)
+    app.dock.setMenu(Menu.buildFromTemplate([
+      { label: 'Reproduzir / Pausar', click: () => sendControl('toggle') },
+      { label: 'Faixa anterior',      click: () => sendControl('previous') },
+      { label: 'Próxima faixa',       click: () => sendControl('next') },
+      { label: 'Parar',               click: () => sendControl('stop') }
+    ]))
   }
 
   app.on('browser-window-created', (_, window) => {
@@ -73,14 +172,13 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  setupTray()
 
-  app.on('activate', function () {
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Player } from './components/Player/Player'
 import { Playlist } from './components/Playlist/Playlist'
@@ -10,8 +10,34 @@ import { useAudioEngine } from './hooks/useAudioEngine'
 declare const __APP_VERSION__: string
 
 export default function App() {
-  const { activePanel } = usePlayerStore()
+  const { activePanel, isPlaying, currentTrack, setIsPlaying, playNext, playPrevious } = usePlayerStore()
   const { seek, getAnalyser } = useAudioEngine()
+
+  // Receive playback commands from tray / dock menu
+  useEffect(() => {
+    const cleanup = window.api.onPlayerControl((action: string) => {
+      const state = usePlayerStore.getState()
+      switch (action) {
+        case 'toggle':   state.setIsPlaying(!state.isPlaying); break
+        case 'next':     state.playNext(); break
+        case 'previous': state.playPrevious(); break
+        case 'stop':
+          state.setIsPlaying(false)
+          seek(0)
+          break
+      }
+    })
+    return cleanup
+  }, [])
+
+  // Keep tray menu in sync with current playback state
+  useEffect(() => {
+    window.api.updateTray({
+      isPlaying,
+      title: currentTrack?.title ?? 'Nenhuma faixa',
+      artist: currentTrack?.artist ?? ''
+    })
+  }, [isPlaying, currentTrack])
 
   return (
     <div className="flex flex-col h-screen bg-[#0a0a0f] text-white overflow-hidden">

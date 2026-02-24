@@ -28,6 +28,14 @@ const api = {
   onYtdlpStatus: (callback: (data: any) => void) => {
     ipcRenderer.on('ytdlp:status', (_, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('ytdlp:status')
+  },
+
+  // Tray / system controls
+  updateTray: (state: { isPlaying: boolean; title: string; artist: string }) =>
+    ipcRenderer.send('tray:update', state),
+  onPlayerControl: (callback: (action: string) => void) => {
+    ipcRenderer.on('player:control', (_, action) => callback(action))
+    return () => ipcRenderer.removeAllListeners('player:control')
   }
 }
 
