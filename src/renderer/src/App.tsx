@@ -7,6 +7,8 @@ import { YouTubeDownloader } from './components/YouTube/YouTubeDownloader'
 import { usePlayerStore } from './store/playerStore'
 import { useAudioEngine } from './hooks/useAudioEngine'
 
+declare const __APP_VERSION__: string
+
 export default function App() {
   const { activePanel } = usePlayerStore()
   const { seek, getAnalyser } = useAudioEngine()
@@ -27,6 +29,12 @@ export default function App() {
           {activePanel === 'equalizer' && <Equalizer />}
           {activePanel === 'youtube' && <YouTubeDownloader />}
         </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 h-6 bg-[#07070e] border-t border-[#1a1a26] flex-shrink-0">
+        <span className="text-[9px] text-slate-700 uppercase tracking-widest">Orion Player</span>
+        <span className="text-[9px] text-slate-700">v{__APP_VERSION__}</span>
       </div>
     </div>
   )

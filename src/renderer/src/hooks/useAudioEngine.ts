@@ -116,7 +116,9 @@ export function useAudioEngine() {
     if (!audioRef.current || !currentTrack) return
     const audio = audioRef.current
 
-    audio.src = `file://${currentTrack.path}`
+    // Normalize Windows backslashes and add triple-slash for drive letters (C:\...)
+    const p = currentTrack.path.replace(/\\/g, '/')
+    audio.src = /^[a-zA-Z]:/.test(p) ? `file:///${p}` : `file://${p}`
     audio.load()
 
     if (isPlaying) {

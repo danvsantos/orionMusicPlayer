@@ -64,7 +64,14 @@ const YTDLP_CANDIDATES = [
   '/opt/homebrew/bin/yt-dlp',          // Apple Silicon Homebrew
   '/usr/local/bin/yt-dlp',             // Intel Mac Homebrew
   '/usr/bin/yt-dlp',                   // Linux system
-  join(homedir(), '.local/bin/yt-dlp') // pip --user install
+  join(homedir(), '.local/bin/yt-dlp'), // pip --user install (Linux/Mac)
+  // Windows locations
+  join(homedir(), 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'yt-dlp.exe'),
+  join(homedir(), 'AppData', 'Roaming', 'Python', 'Scripts', 'yt-dlp.exe'),
+  join(homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'Scripts', 'yt-dlp.exe'),
+  join(homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'Scripts', 'yt-dlp.exe'),
+  join(homedir(), 'scoop', 'shims', 'yt-dlp.exe'),
+  'C:\\ProgramData\\chocolatey\\bin\\yt-dlp.exe'
 ]
 
 async function findYtDlp(): Promise<string> {
@@ -74,12 +81,14 @@ async function findYtDlp(): Promise<string> {
       return bin
     } catch {}
   }
-  // Last resort: rely on PATH
-  try {
-    await execAsync('yt-dlp --version')
-    return 'yt-dlp'
-  } catch {}
-  throw new Error('yt-dlp não encontrado. Instale com: brew install yt-dlp')
+  // Last resort: rely on PATH (try both names for Windows compatibility)
+  for (const cmd of ['yt-dlp', 'yt-dlp.exe']) {
+    try {
+      await execAsync(`"${cmd}" --version`)
+      return cmd
+    } catch {}
+  }
+  throw new Error('yt-dlp não encontrado. Instale com: brew install yt-dlp (Mac) / winget install yt-dlp.yt-dlp (Windows)')
 }
 
 async function getYtDlpVersion(): Promise<string | null> {
@@ -110,6 +119,19 @@ export async function checkAndInstallYtDlp(win: BrowserWindow): Promise<void> {
     } else if (process.platform === 'linux') {
       try { await execAsync('pip3 install -U yt-dlp') }
       catch { await execAsync('pip install -U yt-dlp') }
+    } else if (process.platform === 'win32') {
+      try {
+        await execAsync('winget install --id yt-dlp.yt-dlp --accept-source-agreements --accept-package-agreements')
+      } catch {
+        try { await execAsync('pip install -U yt-dlp') }
+        catch {
+          try { await execAsync('pip3 install -U yt-dlp') }
+          catch {
+            send('unavailable', { message: 'Instale yt-dlp: winget install yt-dlp.yt-dlp ou pip install yt-dlp' })
+            return
+          }
+        }
+      }
     } else {
       send('unavailable', { message: 'Instale o yt-dlp manualmente.' })
       return
@@ -146,11 +168,15 @@ function downloadWithProgress(
       url
     ]
 
+    const isWin = process.platform === 'win32'
     const proc = spawn(binary, args, {
-      env: {
-        ...process.env,
-        PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
-      }
+      shell: isWin,
+      env: isWin
+        ? { ...process.env }
+        : {
+            ...process.env,
+            PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
+          }
     })
 
     let current = 0

@@ -73,6 +73,7 @@ export function registerIpcHandlers(): void {
         )
         return parseInt(stdout.trim(), 10) / 100
       }
+      // Windows: system volume sync not implemented; app uses internal gain node
     } catch {}
     return null
   })
@@ -86,6 +87,7 @@ export function registerIpcHandlers(): void {
       } else if (process.platform === 'linux') {
         await execAsync(`pactl set-sink-volume @DEFAULT_SINK@ ${vol}%`)
       }
+      // Windows: system volume sync not supported; app uses internal gain node
     } catch {}
   })
 

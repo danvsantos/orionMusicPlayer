@@ -1,14 +1,15 @@
 {
   "name": "orion-player",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OrionPlayer - A cross-platform music player inspired by Winamp",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux",
+    "package:mac": "node scripts/build.mjs mac",
+    "package:linux": "node scripts/build.mjs linux",
+    "package:win": "node scripts/build.mjs windows",
     "create-icon": "node scripts/create-icon.mjs"
   },
   "build": {
@@ -20,12 +21,27 @@
     "mac": {
       "category": "public.app-category.music",
       "icon": "resources/icons/512x512.png",
-      "target": ["dmg", "zip"]
+      "target": ["dmg"]
     },
     "linux": {
       "icon": "resources/icons",
       "target": ["AppImage", "deb"],
-      "category": "Audio"
+      "category": "Audio",
+      "maintainer": "OrionPlayer <danvsantos@gmail.com>"
+    },
+    "win": {
+      "icon": "resources/icons/512x512.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OrionPlayer"
     },
     "files": [
       "out/**/*",
