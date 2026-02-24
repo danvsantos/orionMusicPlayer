@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
-import { registerYouTubeHandlers } from './youtube'
+import { registerYouTubeHandlers, checkAndInstallYtDlp } from './youtube'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -26,6 +26,10 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow!.show()
+  })
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    checkAndInstallYtDlp(mainWindow!)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

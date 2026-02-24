@@ -21,6 +21,8 @@ interface DownloadProgress {
   message?: string
 }
 
+type YtdlpStatus = 'checking' | 'installing' | 'available' | 'unavailable'
+
 export function YouTubeDownloader() {
   const [url, setUrl] = useState('')
   const [outputDir, setOutputDir] = useState('')
@@ -29,8 +31,23 @@ export function YouTubeDownloader() {
   const [isFetchingInfo, setIsFetchingInfo] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [progress, setProgress] = useState<DownloadProgress | null>(null)
+  const [ytdlpStatus, setYtdlpStatus] = useState<YtdlpStatus>('checking')
+  const [ytdlpVersion, setYtdlpVersion] = useState('')
+  const [ytdlpMessage, setYtdlpMessage] = useState('')
 
   const { addTracks } = usePlayerStore()
+
+  // Listen for yt-dlp status emitted by main process on startup
+  useEffect(() => {
+    const cleanup = window.api.onYtdlpStatus(
+      (data: { status: YtdlpStatus; version?: string; message?: string }) => {
+        setYtdlpStatus(data.status)
+        if (data.version) setYtdlpVersion(data.version)
+        if (data.message) setYtdlpMessage(data.message)
+      }
+    )
+    return cleanup
+  }, [])
 
   // Listen to download progress
   useEffect(() => {
@@ -220,14 +237,42 @@ export function YouTubeDownloader() {
         </div>
       )}
 
-      {/* Instructions */}
-      <div className="mt-auto bg-[#1a1a26] rounded p-3 space-y-1">
-        <p className="text-[10px] text-slate-500 font-bold">REQUISITO</p>
-        <p className="text-[10px] text-slate-600">
-          O <span className="text-slate-500">yt-dlp</span> precisa estar instalado no sistema:
-        </p>
-        <code className="text-[10px] text-violet-400 block">brew install yt-dlp</code>
-        <code className="text-[10px] text-violet-400 block">pip install yt-dlp</code>
+      {/* yt-dlp status banner */}
+      <div className={`mt-auto rounded p-3 flex items-start gap-2 ${
+        ytdlpStatus === 'available'   ? 'bg-green-900/20 border border-green-800/40' :
+        ytdlpStatus === 'unavailable' ? 'bg-red-900/20 border border-red-800/40' :
+        'bg-[#1a1a26] border border-[#2a2a3e]'
+      }`}>
+        {/* icon */}
+        <span className="text-sm mt-0.5">
+          {ytdlpStatus === 'checking'    && '🔍'}
+          {ytdlpStatus === 'installing'  && '⏳'}
+          {ytdlpStatus === 'available'   && '✅'}
+          {ytdlpStatus === 'unavailable' && '❌'}
+        </span>
+        <div className="space-y-0.5">
+          {ytdlpStatus === 'checking' && (
+            <p className="text-[10px] text-slate-400">Verificando yt-dlp...</p>
+          )}
+          {ytdlpStatus === 'installing' && (
+            <p className="text-[10px] text-amber-400">Instalando yt-dlp automaticamente...</p>
+          )}
+          {ytdlpStatus === 'available' && (
+            <>
+              <p className="text-[10px] text-green-400 font-bold">yt-dlp disponível</p>
+              {ytdlpVersion && <p className="text-[10px] text-slate-500">v{ytdlpVersion}</p>}
+            </>
+          )}
+          {ytdlpStatus === 'unavailable' && (
+            <>
+              <p className="text-[10px] text-red-400 font-bold">yt-dlp não encontrado</p>
+              {ytdlpMessage && <p className="text-[10px] text-slate-600">{ytdlpMessage}</p>}
+              <p className="text-[10px] text-slate-500 mt-1">Instale manualmente:</p>
+              <code className="text-[10px] text-violet-400 block">brew install yt-dlp</code>
+              <code className="text-[10px] text-violet-400 block">pip install yt-dlp</code>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

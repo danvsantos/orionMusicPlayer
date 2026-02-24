@@ -1,7 +1,59 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { mkdir } from 'fs/promises'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 import youtubeDl from 'youtube-dl-exec'
+
+const execAsync = promisify(exec)
+
+async function getYtDlpVersion(): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('yt-dlp --version')
+    return stdout.trim()
+  } catch {}
+  return null
+}
+
+export async function checkAndInstallYtDlp(win: BrowserWindow): Promise<void> {
+  const send = (status: string, extra?: object) =>
+    win.webContents.send('ytdlp:status', { status, ...extra })
+
+  send('checking')
+
+  const version = await getYtDlpVersion()
+  if (version) {
+    send('available', { version })
+    return
+  }
+
+  // Not found — try auto-install
+  send('installing')
+  try {
+    if (process.platform === 'darwin') {
+      await execAsync('brew install yt-dlp')
+    } else if (process.platform === 'linux') {
+      // Try pip3, then pip
+      try {
+        await execAsync('pip3 install -U yt-dlp')
+      } catch {
+        await execAsync('pip install -U yt-dlp')
+      }
+    } else {
+      send('unavailable', { message: 'Instale o yt-dlp manualmente.' })
+      return
+    }
+
+    const newVersion = await getYtDlpVersion()
+    if (newVersion) {
+      send('available', { version: newVersion })
+    } else {
+      send('unavailable', { message: 'Instalação concluída mas yt-dlp não encontrado no PATH.' })
+    }
+  } catch (err: any) {
+    send('unavailable', { message: err.message })
+  }
+}
 
 export function registerYouTubeHandlers(): void {
   ipcMain.handle('youtube:download', async (event, { url, outputDir }: { url: string; outputDir: string }) => {

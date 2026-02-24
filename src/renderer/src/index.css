@@ -99,3 +99,19 @@ input[type="range"]:active::-webkit-slider-thumb {
 .glow-active {
   animation: glow-pulse 2s ease-in-out infinite;
 }
+
+/* Marquee */
+.marquee-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee-scroll var(--marquee-dur, 10s) linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes marquee-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

@@ -1,7 +1,11 @@
 import { ipcMain, dialog } from 'electron'
-import { readdir, readFile } from 'fs/promises'
+import { readdir } from 'fs/promises'
 import { join, extname, basename } from 'path'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 import { parseFile } from 'music-metadata'
+
+const execAsync = promisify(exec)
 
 const SUPPORTED_FORMATS = ['.mp3', '.aac', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.wma', '.webm']
 
@@ -55,6 +59,34 @@ export function registerIpcHandlers(): void {
       console.error('Error scanning folder:', err)
       return []
     }
+  })
+
+  // System volume: get (returns 0–1) or null if unsupported
+  ipcMain.handle('volume:getSystem', async () => {
+    try {
+      if (process.platform === 'darwin') {
+        const { stdout } = await execAsync('osascript -e "output volume of (get volume settings)"')
+        return parseInt(stdout.trim(), 10) / 100
+      } else if (process.platform === 'linux') {
+        const { stdout } = await execAsync(
+          "pactl get-sink-volume @DEFAULT_SINK@ | awk '/Volume:/ {gsub(/%/,\"\"); print $5; exit}'"
+        )
+        return parseInt(stdout.trim(), 10) / 100
+      }
+    } catch {}
+    return null
+  })
+
+  // System volume: set (0–1)
+  ipcMain.handle('volume:setSystem', async (_, volume: number) => {
+    const vol = Math.round(Math.max(0, Math.min(1, volume)) * 100)
+    try {
+      if (process.platform === 'darwin') {
+        await execAsync(`osascript -e "set volume output volume ${vol}"`)
+      } else if (process.platform === 'linux') {
+        await execAsync(`pactl set-sink-volume @DEFAULT_SINK@ ${vol}%`)
+      }
+    } catch {}
   })
 
   // Read audio metadata

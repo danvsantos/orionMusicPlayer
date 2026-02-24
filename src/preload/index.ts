@@ -13,6 +13,10 @@ const api = {
   scanFolder: (path: string) => ipcRenderer.invoke('folder:scan', path),
   getMetadata: (path: string) => ipcRenderer.invoke('audio:metadata', path),
 
+  // System volume
+  getSystemVolume: () => ipcRenderer.invoke('volume:getSystem'),
+  setSystemVolume: (volume: number) => ipcRenderer.invoke('volume:setSystem', volume),
+
   // YouTube
   youtubeDownload: (url: string, outputDir: string) =>
     ipcRenderer.invoke('youtube:download', { url, outputDir }),
@@ -20,6 +24,10 @@ const api = {
   onYoutubeProgress: (callback: (data: any) => void) => {
     ipcRenderer.on('youtube:progress', (_, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('youtube:progress')
+  },
+  onYtdlpStatus: (callback: (data: any) => void) => {
+    ipcRenderer.on('ytdlp:status', (_, data) => callback(data))
+    return () => ipcRenderer.removeAllListeners('ytdlp:status')
   }
 }
 

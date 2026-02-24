@@ -1,8 +1,9 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
 import { useEqualizerStore } from '../../store/equalizerStore'
 import { formatTime } from '../../utils/time'
 import { Visualizer } from '../Visualizer/Visualizer'
+import { Marquee } from '../Marquee'
 
 interface PlayerProps {
   seek: (time: number) => void
@@ -70,6 +71,27 @@ export function Player({ seek, getAnalyser }: PlayerProps) {
 
   const { isEnabled, setEnabled } = useEqualizerStore()
 
+  // Sync volume slider with system volume on mount + poll every 2s
+  useEffect(() => {
+    let isSetting = false
+
+    const syncFromSystem = async () => {
+      if (isSetting) return
+      const sysVol: number | null = await window.api.getSystemVolume()
+      if (sysVol !== null) {
+        const currentVol = usePlayerStore.getState().volume
+        if (Math.abs(sysVol - currentVol) > 0.02) {
+          setVolume(sysVol)
+          setIsMuted(sysVol === 0)
+        }
+      }
+    }
+
+    syncFromSystem()
+    const interval = setInterval(syncFromSystem, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
   const togglePlay = useCallback(() => {
     if (!currentTrack) return
     setIsPlaying(!isPlaying)
@@ -80,8 +102,10 @@ export function Player({ seek, getAnalyser }: PlayerProps) {
   }, [seek])
 
   const handleVolume = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseFloat(e.target.value))
+    const v = parseFloat(e.target.value)
+    setVolume(v)
     if (isMuted) setIsMuted(false)
+    window.api.setSystemVolume(v)
   }, [isMuted])
 
   const cyclePlayMode = useCallback(() => {
@@ -113,12 +137,16 @@ export function Player({ seek, getAnalyser }: PlayerProps) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-white truncate">
-            {currentTrack?.title || 'No Track Selected'}
-          </div>
-          <div className="text-xs text-violet-400 truncate mt-0.5">
-            {currentTrack?.artist || '---'}
-          </div>
+          <Marquee
+            text={currentTrack?.title || 'No Track Selected'}
+            className="text-sm font-bold text-white"
+            speed={currentTrack ? 45 : 0}
+          />
+          <Marquee
+            text={currentTrack?.artist || '---'}
+            className="text-xs text-violet-400 mt-0.5"
+            speed={35}
+          />
           <div className="text-xs text-slate-500 truncate">
             {currentTrack?.album || '---'}
           </div>
