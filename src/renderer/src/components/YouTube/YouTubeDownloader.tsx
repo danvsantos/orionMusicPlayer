@@ -36,16 +36,18 @@ export function YouTubeDownloader() {
   const [ytdlpStatus, setYtdlpStatus] = useState<YtdlpStatus>('checking')
   const [ytdlpVersion, setYtdlpVersion] = useState('')
   const [ytdlpMessage, setYtdlpMessage] = useState('')
+  const [ffmpegMissing, setFfmpegMissing] = useState(false)
 
   const { addTracks } = usePlayerStore()
 
   // Listen for yt-dlp status emitted by main process on startup
   useEffect(() => {
     const cleanup = window.api.onYtdlpStatus(
-      (data: { status: YtdlpStatus; version?: string; message?: string }) => {
+      (data: { status: YtdlpStatus; version?: string; message?: string; ffmpegMissing?: boolean }) => {
         setYtdlpStatus(data.status)
         if (data.version) setYtdlpVersion(data.version)
         if (data.message) setYtdlpMessage(data.message)
+        if (data.ffmpegMissing !== undefined) setFfmpegMissing(data.ffmpegMissing)
       }
     )
     return cleanup
@@ -294,12 +296,19 @@ export function YouTubeDownloader() {
             <p className="text-[10px] text-slate-400">Verificando yt-dlp...</p>
           )}
           {ytdlpStatus === 'installing' && (
-            <p className="text-[10px] text-amber-400">Instalando yt-dlp automaticamente...</p>
+            <p className="text-[10px] text-amber-400">{ytdlpMessage || 'Instalando yt-dlp automaticamente...'}</p>
           )}
           {ytdlpStatus === 'available' && (
             <>
               <p className="text-[10px] text-green-400 font-bold">yt-dlp disponível</p>
               {ytdlpVersion && <p className="text-[10px] text-slate-500">v{ytdlpVersion}</p>}
+              {ffmpegMissing && (
+                <div className="mt-1.5 space-y-0.5">
+                  <p className="text-[10px] text-amber-400 font-bold">ffmpeg não encontrado</p>
+                  <p className="text-[10px] text-slate-500">Downloads ficarão no formato original sem converter para MP3.</p>
+                  <code className="text-[10px] text-violet-400 block mt-0.5">brew install ffmpeg</code>
+                </div>
+              )}
             </>
           )}
           {ytdlpStatus === 'unavailable' && (

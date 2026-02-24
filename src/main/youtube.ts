@@ -11,20 +11,22 @@ const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.o
 function sanitizeFilename(name: string): string {
   return (
     name
+      // Remove content inside square brackets entirely (YouTube noise: [Official MV], [4K], [ID], etc.)
+      .replace(/\[.*?\]/g, '')
       // Remove emojis — all known Unicode emoji/symbol blocks
-      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')   // Supplemental symbols, emoticons, etc.
-      .replace(/[\u{2600}-\u{27BF}]/gu, '')       // Misc symbols, dingbats
-      .replace(/[\u{2300}-\u{23FF}]/gu, '')       // Misc technical
-      .replace(/[\u{FE00}-\u{FE0F}]/gu, '')       // Variation selectors
-      .replace(/\u{200D}/gu, '')                  // Zero-width joiner (used in compound emojis)
-      .replace(/\u{20E3}/gu, '')                  // Combining enclosing keycap
-      // Remove characters that are invalid or problematic in filenames
-      // Keep: letters (all scripts), digits, spaces, hyphens, underscores, dots, parentheses, commas, brackets, ampersand
-      .replace(/[^\p{L}\p{N}\s\-_.,()[\]&]/gu, '')
-      // Normalize whitespace
-      .trim()
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+      .replace(/[\u{2600}-\u{27BF}]/gu, '')
+      .replace(/[\u{2300}-\u{23FF}]/gu, '')
+      .replace(/[\u{FE00}-\u{FE0F}]/gu, '')
+      .replace(/\u{200D}/gu, '')
+      .replace(/\u{20E3}/gu, '')
+      // Keep only: letters (all scripts/accents), digits, spaces, hyphens, underscores, dots, parentheses, commas
+      .replace(/[^\p{L}\p{N}\s\-_.,()]/gu, '')
+      // Normalize whitespace and strip leading/trailing hyphens or spaces
       .replace(/\s{2,}/g, ' ')
-  ) || 'audio'  // fallback if name becomes empty
+      .trim()
+      .replace(/^[\s\-]+|[\s\-]+$/g, '')
+  ) || 'audio'
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -45,7 +47,6 @@ async function sanitizeFilesInDir(dir: string): Promise<void> {
     const oldPath = join(dir, file)
     let newPath = join(dir, cleanName + ext)
 
-    // Avoid overwriting an existing file
     if (await fileExists(newPath)) {
       let i = 2
       while (await fileExists(join(dir, `${cleanName} (${i})${ext}`))) i++
@@ -59,13 +60,14 @@ async function sanitizeFilesInDir(dir: string): Promise<void> {
 
 const execAsync = promisify(exec)
 
-// Known yt-dlp binary locations
+// ── yt-dlp ──────────────────────────────────────────────────────────────────
+
 const YTDLP_CANDIDATES = [
-  '/opt/homebrew/bin/yt-dlp',          // Apple Silicon Homebrew
-  '/usr/local/bin/yt-dlp',             // Intel Mac Homebrew
-  '/usr/bin/yt-dlp',                   // Linux system
-  join(homedir(), '.local/bin/yt-dlp'), // pip --user install (Linux/Mac)
-  // Windows locations
+  '/opt/homebrew/bin/yt-dlp',
+  '/usr/local/bin/yt-dlp',
+  '/usr/bin/yt-dlp',
+  join(homedir(), '.local/bin/yt-dlp'),
+  // Windows
   join(homedir(), 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'yt-dlp.exe'),
   join(homedir(), 'AppData', 'Roaming', 'Python', 'Scripts', 'yt-dlp.exe'),
   join(homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'Scripts', 'yt-dlp.exe'),
@@ -76,17 +78,10 @@ const YTDLP_CANDIDATES = [
 
 async function findYtDlp(): Promise<string> {
   for (const bin of YTDLP_CANDIDATES) {
-    try {
-      await execAsync(`"${bin}" --version`)
-      return bin
-    } catch {}
+    try { await execAsync(`"${bin}" --version`); return bin } catch {}
   }
-  // Last resort: rely on PATH (try both names for Windows compatibility)
   for (const cmd of ['yt-dlp', 'yt-dlp.exe']) {
-    try {
-      await execAsync(`"${cmd}" --version`)
-      return cmd
-    } catch {}
+    try { await execAsync(`"${cmd}" --version`); return cmd } catch {}
   }
   throw new Error('yt-dlp não encontrado. Instale com: brew install yt-dlp (Mac) / winget install yt-dlp.yt-dlp (Windows)')
 }
@@ -100,70 +95,119 @@ async function getYtDlpVersion(): Promise<string | null> {
   return null
 }
 
+// ── ffmpeg ───────────────────────────────────────────────────────────────────
+
+const FFMPEG_CANDIDATES = [
+  '/opt/homebrew/bin/ffmpeg',
+  '/usr/local/bin/ffmpeg',
+  '/usr/bin/ffmpeg',
+  join(homedir(), '.local/bin/ffmpeg'),
+  // Windows
+  join(homedir(), 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe'),
+  join(homedir(), 'scoop', 'shims', 'ffmpeg.exe'),
+  'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',
+  'C:\\ffmpeg\\bin\\ffmpeg.exe'
+]
+
+async function findFfmpeg(): Promise<string | null> {
+  for (const bin of FFMPEG_CANDIDATES) {
+    try { await execAsync(`"${bin}" -version`); return bin } catch {}
+  }
+  for (const cmd of ['ffmpeg', 'ffmpeg.exe']) {
+    try { await execAsync(`"${cmd}" -version`); return cmd } catch {}
+  }
+  return null
+}
+
+async function installFfmpeg(): Promise<string | null> {
+  try {
+    if (process.platform === 'darwin') {
+      await execAsync('brew install ffmpeg')
+    } else if (process.platform === 'win32') {
+      await execAsync('winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements')
+    } else {
+      return null // Linux: needs sudo, skip auto-install
+    }
+    return findFfmpeg()
+  } catch {
+    return null
+  }
+}
+
+// ── startup check ────────────────────────────────────────────────────────────
+
 export async function checkAndInstallYtDlp(win: BrowserWindow): Promise<void> {
   const send = (status: string, extra?: object) =>
     win.webContents.send('ytdlp:status', { status, ...extra })
 
   send('checking')
 
-  const version = await getYtDlpVersion()
-  if (version) {
-    send('available', { version })
-    return
-  }
-
-  send('installing')
-  try {
-    if (process.platform === 'darwin') {
-      await execAsync('brew install yt-dlp')
-    } else if (process.platform === 'linux') {
-      try { await execAsync('pip3 install -U yt-dlp') }
-      catch { await execAsync('pip install -U yt-dlp') }
-    } else if (process.platform === 'win32') {
-      try {
-        await execAsync('winget install --id yt-dlp.yt-dlp --accept-source-agreements --accept-package-agreements')
-      } catch {
-        try { await execAsync('pip install -U yt-dlp') }
-        catch {
-          try { await execAsync('pip3 install -U yt-dlp') }
-          catch {
-            send('unavailable', { message: 'Instale yt-dlp: winget install yt-dlp.yt-dlp ou pip install yt-dlp' })
-            return
-          }
+  // 1. yt-dlp
+  let version = await getYtDlpVersion()
+  if (!version) {
+    send('installing')
+    try {
+      if (process.platform === 'darwin') {
+        await execAsync('brew install yt-dlp')
+      } else if (process.platform === 'linux') {
+        try { await execAsync('pip3 install -U yt-dlp') }
+        catch { await execAsync('pip install -U yt-dlp') }
+      } else if (process.platform === 'win32') {
+        try {
+          await execAsync('winget install --id yt-dlp.yt-dlp --accept-source-agreements --accept-package-agreements')
+        } catch {
+          try { await execAsync('pip install -U yt-dlp') }
+          catch { await execAsync('pip3 install -U yt-dlp') }
         }
+      } else {
+        send('unavailable', { message: 'Instale o yt-dlp manualmente.' })
+        return
       }
-    } else {
-      send('unavailable', { message: 'Instale o yt-dlp manualmente.' })
+      version = await getYtDlpVersion()
+    } catch (err: any) {
+      send('unavailable', { message: err.message })
       return
     }
 
-    const newVersion = await getYtDlpVersion()
-    if (newVersion) {
-      send('available', { version: newVersion })
-    } else {
-      send('unavailable', { message: 'Instalado mas não encontrado no PATH.' })
+    if (!version) {
+      send('unavailable', { message: 'yt-dlp instalado mas não encontrado no PATH.' })
+      return
     }
-  } catch (err: any) {
-    send('unavailable', { message: err.message })
   }
+
+  // 2. ffmpeg (needed for MP3 conversion)
+  let ffmpegBin = await findFfmpeg()
+  if (!ffmpegBin) {
+    send('installing', { message: 'Instalando ffmpeg para conversão MP3...' })
+    ffmpegBin = await installFfmpeg()
+  }
+
+  send('available', {
+    version,
+    ffmpegMissing: !ffmpegBin,
+    message: ffmpegBin ? undefined : 'ffmpeg não encontrado — downloads ficarão no formato original. Instale: brew install ffmpeg'
+  })
 }
 
-// Spawn yt-dlp and stream stdout line-by-line with progress events
+// ── download ─────────────────────────────────────────────────────────────────
+
 function downloadWithProgress(
   binary: string,
   url: string,
   outputDir: string,
   total: number,
-  sender: WebContents
+  sender: WebContents,
+  ffmpegBin: string | null
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
       '--extract-audio',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
+      ...(ffmpegBin ? ['--ffmpeg-location', ffmpegBin] : []),
       '--output', join(outputDir, '%(title)s.%(ext)s'),
       '--add-metadata',
-      '--newline',           // one progress line per update (easier to parse)
+      '--newline',
       '--no-playlist-reverse',
       url
     ]
@@ -220,9 +264,9 @@ function downloadWithProgress(
     })
 
     proc.stderr!.on('data', (chunk: Buffer) => {
-      const line = chunk.toString()
-      if (line.toLowerCase().includes('error')) {
-        console.error('[yt-dlp stderr]', line.trim())
+      const text = chunk.toString()
+      if (text.toLowerCase().includes('error')) {
+        console.error('[yt-dlp stderr]', text.trim())
       }
     })
 
@@ -235,14 +279,16 @@ function downloadWithProgress(
   })
 }
 
+// ── IPC handlers ─────────────────────────────────────────────────────────────
+
 export function registerYouTubeHandlers(): void {
   ipcMain.handle('youtube:download', async (event, { url, outputDir, folderName }: { url: string; outputDir: string; folderName: string }) => {
     const sender = event.sender
 
     try {
       const binary = await findYtDlp()
+      const ffmpegBin = await findFfmpeg()
 
-      // Get playlist/video info for total count
       const info = await youtubeDl(url, {
         dumpSingleJson: true,
         noWarnings: true,
@@ -251,16 +297,14 @@ export function registerYouTubeHandlers(): void {
 
       const total = info.entries ? info.entries.length : 1
 
-      // Create named subfolder — use provided folderName or fall back to sanitized playlist title
       const rawName = folderName.trim() || sanitizeFilename(info.title || 'YouTube Download')
       const finalDir = join(outputDir, sanitizeFilename(rawName))
       await mkdir(finalDir, { recursive: true })
 
       sender.send('youtube:progress', { status: 'downloading', total, current: 0, percent: 0, message: 'Iniciando...' })
 
-      await downloadWithProgress(binary, url, finalDir, total, sender)
+      await downloadWithProgress(binary, url, finalDir, total, sender, ffmpegBin)
 
-      // Clean up emojis and special characters from downloaded filenames
       sender.send('youtube:progress', { status: 'downloading', total, current: total, percent: 99, message: 'Limpando nomes de arquivo...' })
       await sanitizeFilesInDir(finalDir)
 
