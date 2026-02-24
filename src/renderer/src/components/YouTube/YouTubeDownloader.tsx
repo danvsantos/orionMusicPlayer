@@ -27,6 +27,7 @@ type YtdlpStatus = 'checking' | 'installing' | 'available' | 'unavailable'
 export function YouTubeDownloader() {
   const [url, setUrl] = useState('')
   const [outputDir, setOutputDir] = useState('')
+  const [folderName, setFolderName] = useState('')
   const [info, setInfo] = useState<PlaylistInfo | null>(null)
   const [infoError, setInfoError] = useState('')
   const [isFetchingInfo, setIsFetchingInfo] = useState(false)
@@ -74,8 +75,10 @@ export function YouTubeDownloader() {
       setInfoError(`Erro: ${result.error}. Certifique-se que yt-dlp esta instalado.`)
     } else {
       setInfo(result)
+      // Auto-fill folder name from playlist/video title (only if user hasn't typed one)
+      if (!folderName) setFolderName(result.title || '')
     }
-  }, [url])
+  }, [url, folderName])
 
   const handleSelectOutputDir = useCallback(async () => {
     const dir = await window.api.openFolder()
@@ -83,15 +86,15 @@ export function YouTubeDownloader() {
   }, [])
 
   const handleDownload = useCallback(async () => {
-    if (!url.trim() || !outputDir) return
+    if (!url.trim() || !outputDir || !folderName.trim()) return
     setIsDownloading(true)
     setProgress({ status: 'starting', total: info?.count || 0, current: 0 })
 
-    const result = await window.api.youtubeDownload(url.trim(), outputDir)
+    const result = await window.api.youtubeDownload(url.trim(), outputDir, folderName.trim())
 
     if (result.success) {
-      // Auto-load downloaded files
-      const files = await window.api.scanFolder(outputDir)
+      // Auto-load from the actual subfolder created
+      const files = await window.api.scanFolder(result.outputDir)
       if (files.length > 0) {
         // Load metadata and add to playlist
         const tracks = files.map((path: string) => {
@@ -122,7 +125,7 @@ export function YouTubeDownloader() {
         }
       }
     }
-  }, [url, outputDir, info])
+  }, [url, outputDir, folderName, info])
 
   // Overall progress = item progress + within-item percentage
   const progressPercent = progress
@@ -151,7 +154,7 @@ export function YouTubeDownloader() {
           <input
             type="url"
             value={url}
-            onChange={(e) => { setUrl(e.target.value); setInfo(null); setInfoError('') }}
+            onChange={(e) => { setUrl(e.target.value); setInfo(null); setInfoError(''); setFolderName('') }}
             onKeyDown={(e) => e.key === 'Enter' && handleFetchInfo()}
             placeholder="https://youtube.com/playlist?list=..."
             className="flex-1 bg-[#1a1a26] border border-[#2a2a3e] rounded px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-violet-600 transition-colors"
@@ -187,19 +190,41 @@ export function YouTubeDownloader() {
         </div>
       )}
 
+      {/* Folder name */}
+      <div className="space-y-2">
+        <label className="text-[10px] text-slate-500 uppercase">Nome da pasta</label>
+        <input
+          type="text"
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          placeholder="Ex: Minhas Músicas do YouTube"
+          className="w-full bg-[#1a1a26] border border-[#2a2a3e] rounded px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-violet-600 transition-colors"
+          style={{ WebkitUserSelect: 'text', userSelect: 'text' } as React.CSSProperties}
+        />
+      </div>
+
       {/* Output Directory */}
       <div className="space-y-2">
-        <label className="text-[10px] text-slate-500 uppercase">Pasta de destino</label>
+        <label className="text-[10px] text-slate-500 uppercase">Salvar em</label>
         <div className="flex gap-2">
           <div
-            className="flex-1 bg-[#1a1a26] border border-[#2a2a3e] rounded px-3 py-2 text-xs text-slate-500 truncate cursor-pointer hover:border-violet-700 transition-colors"
+            className="flex-1 bg-[#1a1a26] border border-[#2a2a3e] rounded px-3 py-2 text-xs truncate cursor-pointer hover:border-violet-700 transition-colors"
             onClick={handleSelectOutputDir}
           >
-            {outputDir || 'Clique para selecionar pasta...'}
+            {outputDir ? (
+              <span className="text-slate-300">
+                {outputDir}
+                {folderName.trim() && (
+                  <span className="text-violet-400"> / {folderName.trim()}</span>
+                )}
+              </span>
+            ) : (
+              <span className="text-slate-600">Clique para selecionar pasta...</span>
+            )}
           </div>
           <button
             onClick={handleSelectOutputDir}
-            className="px-3 py-2 text-[10px] bg-[#2a2a3e] hover:bg-[#3a3a4e] text-slate-300 rounded transition-colors font-bold"
+            className="px-3 py-2 text-[10px] bg-[#2a2a3e] hover:bg-[#3a3a4e] text-slate-300 rounded transition-colors font-bold flex-shrink-0"
           >
             PASTA
           </button>
@@ -209,7 +234,7 @@ export function YouTubeDownloader() {
       {/* Download Button */}
       <button
         onClick={handleDownload}
-        disabled={!url.trim() || !outputDir || isDownloading}
+        disabled={!url.trim() || !outputDir || !folderName.trim() || isDownloading}
         className={`py-3 rounded text-sm font-bold transition-all ${
           !url.trim() || !outputDir || isDownloading
             ? 'bg-[#1a1a26] text-slate-700 cursor-not-allowed'

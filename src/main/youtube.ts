@@ -210,12 +210,10 @@ function downloadWithProgress(
 }
 
 export function registerYouTubeHandlers(): void {
-  ipcMain.handle('youtube:download', async (event, { url, outputDir }: { url: string; outputDir: string }) => {
+  ipcMain.handle('youtube:download', async (event, { url, outputDir, folderName }: { url: string; outputDir: string; folderName: string }) => {
     const sender = event.sender
 
     try {
-      await mkdir(outputDir, { recursive: true })
-
       const binary = await findYtDlp()
 
       // Get playlist/video info for total count
@@ -226,16 +224,22 @@ export function registerYouTubeHandlers(): void {
       }) as any
 
       const total = info.entries ? info.entries.length : 1
+
+      // Create named subfolder — use provided folderName or fall back to sanitized playlist title
+      const rawName = folderName.trim() || sanitizeFilename(info.title || 'YouTube Download')
+      const finalDir = join(outputDir, sanitizeFilename(rawName))
+      await mkdir(finalDir, { recursive: true })
+
       sender.send('youtube:progress', { status: 'downloading', total, current: 0, percent: 0, message: 'Iniciando...' })
 
-      await downloadWithProgress(binary, url, outputDir, total, sender)
+      await downloadWithProgress(binary, url, finalDir, total, sender)
 
       // Clean up emojis and special characters from downloaded filenames
       sender.send('youtube:progress', { status: 'downloading', total, current: total, percent: 99, message: 'Limpando nomes de arquivo...' })
-      await sanitizeFilesInDir(outputDir)
+      await sanitizeFilesInDir(finalDir)
 
       sender.send('youtube:progress', { status: 'done', total, current: total, percent: 100 })
-      return { success: true, outputDir }
+      return { success: true, outputDir: finalDir }
     } catch (err: any) {
       console.error('YouTube download error:', err)
       sender.send('youtube:progress', { status: 'error', message: err.message })

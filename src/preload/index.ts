@@ -18,8 +18,8 @@ const api = {
   setSystemVolume: (volume: number) => ipcRenderer.invoke('volume:setSystem', volume),
 
   // YouTube
-  youtubeDownload: (url: string, outputDir: string) =>
-    ipcRenderer.invoke('youtube:download', { url, outputDir }),
+  youtubeDownload: (url: string, outputDir: string, folderName: string) =>
+    ipcRenderer.invoke('youtube:download', { url, outputDir, folderName }),
   youtubeInfo: (url: string) => ipcRenderer.invoke('youtube:info', url),
   onYoutubeProgress: (callback: (data: any) => void) => {
     ipcRenderer.on('youtube:progress', (_, data) => callback(data))
