@@ -11,7 +11,7 @@ declare const __APP_VERSION__: string
 
 export default function App() {
   const { activePanel, isPlaying, currentTrack, setIsPlaying, playNext, playPrevious } = usePlayerStore()
-  const { seek, getAnalyser } = useAudioEngine()
+  const { seek, getAnalyser, outputDevices, currentDeviceId, setOutputDevice } = useAudioEngine()
 
   // Receive playback commands from tray / dock menu
   useEffect(() => {
@@ -46,7 +46,13 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Player controls */}
         <div className="w-80 flex-shrink-0 flex flex-col border-r border-[#2a2a3e] bg-[#0d0d15]">
-          <Player seek={seek} getAnalyser={getAnalyser} />
+          <Player
+            seek={seek}
+            getAnalyser={getAnalyser}
+            outputDevices={outputDevices}
+            currentDeviceId={currentDeviceId}
+            setOutputDevice={setOutputDevice}
+          />
         </div>
 
         {/* Right: Dynamic panel */}

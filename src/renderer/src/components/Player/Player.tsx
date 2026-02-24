@@ -8,6 +8,9 @@ import { Marquee } from '../Marquee'
 interface PlayerProps {
   seek: (time: number) => void
   getAnalyser: () => AnalyserNode | null
+  outputDevices: MediaDeviceInfo[]
+  currentDeviceId: string
+  setOutputDevice: (deviceId: string) => void
 }
 
 const PlayIcon = () => (
@@ -62,7 +65,7 @@ const VolumeIcon = ({ muted, volume }: { muted: boolean; volume: number }) => (
   </svg>
 )
 
-export function Player({ seek, getAnalyser }: PlayerProps) {
+export function Player({ seek, getAnalyser, outputDevices, currentDeviceId, setOutputDevice }: PlayerProps) {
   const {
     currentTrack, isPlaying, currentTime, duration, volume, isMuted, playMode,
     setIsPlaying, setVolume, setIsMuted, setPlayMode, playNext, playPrevious,
@@ -244,6 +247,27 @@ export function Player({ seek, getAnalyser }: PlayerProps) {
           />
         </div>
       </div>
+
+      {/* Audio Output Device */}
+      {outputDevices.length > 1 && (
+        <div className="px-4 py-1.5 flex items-center gap-2 border-t border-[#1a1a26] no-drag">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-slate-600 flex-shrink-0">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+          </svg>
+          <select
+            value={currentDeviceId}
+            onChange={(e) => setOutputDevice(e.target.value)}
+            className="flex-1 bg-transparent text-[10px] text-slate-500 outline-none cursor-pointer truncate"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {outputDevices.map(device => (
+              <option key={device.deviceId} value={device.deviceId} className="bg-[#1a1a26] text-slate-300">
+                {device.label || (device.deviceId === 'default' ? 'Padrão do sistema' : `Dispositivo ${device.deviceId.slice(0, 8)}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Panel Tabs */}
       <div className="flex border-t border-[#2a2a3e] no-drag">

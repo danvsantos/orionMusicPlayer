@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { usePlayerStore } from '../store/playerStore'
 import { useEqualizerStore } from '../store/equalizerStore'
 
@@ -11,6 +11,9 @@ export function useAudioEngine() {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const eqFiltersRef = useRef<BiquadFilterNode[]>([])
   const isConnectedRef = useRef(false)
+
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>('default')
 
   const {
     currentTrack, isPlaying, volume, isMuted, playMode,
@@ -180,5 +183,34 @@ export function useAudioEngine() {
 
   const getAnalyser = useCallback(() => analyserRef.current, [])
 
-  return { seek, getAnalyser, audioRef }
+  // ── Audio output device selection ──────────────────────────────────────────
+
+  const enumerateOutputDevices = useCallback(async () => {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices()
+      const outputs = all.filter(d => d.kind === 'audiooutput')
+      setOutputDevices(outputs)
+    } catch {
+      // enumerateDevices not supported or denied — silently ignore
+    }
+  }, [])
+
+  // Enumerate on mount and whenever audio hardware changes
+  useEffect(() => {
+    enumerateOutputDevices()
+    navigator.mediaDevices.addEventListener('devicechange', enumerateOutputDevices)
+    return () => navigator.mediaDevices.removeEventListener('devicechange', enumerateOutputDevices)
+  }, [enumerateOutputDevices])
+
+  const setOutputDevice = useCallback(async (deviceId: string) => {
+    if (!audioRef.current) return
+    try {
+      await (audioRef.current as any).setSinkId(deviceId)
+      setCurrentDeviceId(deviceId)
+    } catch (err) {
+      console.error('Failed to set audio output device:', err)
+    }
+  }, [])
+
+  return { seek, getAnalyser, audioRef, outputDevices, currentDeviceId, setOutputDevice }
 }
