@@ -85,6 +85,27 @@ audio.src = /^[a-zA-Z]:/.test(p) ? `file:///${p}` : `file://${p}`
 
 ---
 
+## Tray e Dock Menu
+
+**Tray** (`src/main/index.ts`):
+- Criado em `setupTray()` chamado em `app.whenReady()` — referência mantida em `let tray: Tray | null` (evita GC)
+- Ícone: `resources/icon.png` redimensionado para 16×16 via `nativeImage`
+- Menu rebuilt em `refreshTrayMenu()` toda vez que o renderer envia `tray:update`
+- Windows/Linux: clique no ícone mostra/foca a janela; botão direito abre o menu
+- macOS: clique esquerdo abre o menu (comportamento padrão de menu bar)
+
+**Dock menu (macOS)**: `app.dock.setMenu()` com itens estáticos (Reproduzir/Pausar, Anterior, Próxima, Parar)
+
+**Fluxo de comunicação:**
+```
+Tray/Dock click → main: sendControl(action) → webContents.send('player:control', action)
+                → renderer: onPlayerControl → usePlayerStore.getState().setIsPlaying / playNext / playPrevious
+Renderer state change (isPlaying/currentTrack) → ipcRenderer.send('tray:update', state)
+                → main: ipcMain.on('tray:update') → refreshTrayMenu()
+```
+
+**Ações suportadas:** `toggle`, `next`, `previous`, `stop`
+
 ## IPC — window.api (preload/index.ts)
 
 | Método | IPC channel | Direção |
@@ -99,6 +120,8 @@ audio.src = /^[a-zA-Z]:/.test(p) ? `file:///${p}` : `file://${p}`
 | `youtubeDownload(url, dir, name)` | `youtube:download` | invoke |
 | `onYoutubeProgress(cb)` | `youtube:progress` | on (main→renderer) |
 | `onYtdlpStatus(cb)` | `ytdlp:status` | on (main→renderer) |
+| `updateTray(state)` | `tray:update` | send (renderer→main) |
+| `onPlayerControl(cb)` | `player:control` | on (main→renderer) |
 | `minimize/maximize/close()` | `window:minimize/maximize/close` | send |
 
 ---
