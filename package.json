@@ -1,6 +1,6 @@
 {
   "name": "orion-player",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "OrionPlayer - A cross-platform music player inspired by Winamp",
   "main": "out/main/index.js",
   "scripts": {

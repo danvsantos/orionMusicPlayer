@@ -4,7 +4,7 @@ import { homedir } from 'os'
 import { mkdir, readdir, rename, access } from 'fs/promises'
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
-import youtubeDl from 'youtube-dl-exec'
+import { create as createYoutubeDl } from 'youtube-dl-exec'
 
 const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.opus', '.webm'])
 
@@ -209,6 +209,7 @@ function downloadWithProgress(
       '--add-metadata',
       '--newline',
       '--no-playlist-reverse',
+      '--ignore-errors',
       url
     ]
 
@@ -288,8 +289,9 @@ export function registerYouTubeHandlers(): void {
     try {
       const binary = await findYtDlp()
       const ffmpegBin = await findFfmpeg()
+      const ytdl = createYoutubeDl(binary)
 
-      const info = await youtubeDl(url, {
+      const info = await ytdl(url, {
         dumpSingleJson: true,
         noWarnings: true,
         flatPlaylist: true
@@ -319,7 +321,9 @@ export function registerYouTubeHandlers(): void {
 
   ipcMain.handle('youtube:info', async (_, url: string) => {
     try {
-      const info = await youtubeDl(url, {
+      const binary = await findYtDlp()
+      const ytdl = createYoutubeDl(binary)
+      const info = await ytdl(url, {
         dumpSingleJson: true,
         noWarnings: true,
         flatPlaylist: true
